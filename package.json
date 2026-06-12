@@ -1,0 +1,27 @@
+{
+  "name": "nhm-realtime",
+  "version": "1.0.0",
+  "description": "Realtime tracking service for NHM Dat Xe",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node index.js",
+    "mock:accept": "node scripts/driver-accept.js",
+    "mock:stream": "node scripts/driver-stream.js",
+    "mock:arrived": "node scripts/driver-arrived.js",
+    "mock:cancel": "node scripts/driver-cancel.js",
+    "test": "echo \"No tests configured\""
+  },
+  "keywords": [
+    "socket.io",
+    "redis",
+    "tracking"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "dotenv": "^17.4.2",
+    "ioredis": "^5.10.1",
+    "socket.io": "^4.8.3"
+  }
+}
