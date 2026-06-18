@@ -223,7 +223,7 @@ async function subscribeRedis(io) {
         io.to(userRoom).to(userRoomDot).emit(eventToEmit, eventData);
         
       }
-s 
+
       // Finance specific handling
       if (channel === config.redisFinanceChannel) {
         const walletRoom = getWalletRoom(userId);
