@@ -75,9 +75,21 @@ function buildStalePayload(state) {
 
 function attachSocketHandlers(io) {
   io.on('connection', (socket) => {
-    logger.info('👤 CLIENT CONNECTED', { socketId: socket.id });
-
     const initialRideId = socket.handshake.auth?.rideId || socket.handshake.query?.rideId;
+    const initialUserId = socket.handshake.auth?.userId || socket.handshake.query?.userId;
+    const initialWalletUserId = socket.handshake.auth?.walletUserId || socket.handshake.query?.walletUserId;
+
+    // Log đủ context lúc connect — trước đây chỉ log socketId, không biết socket
+    // này thuộc tài xế/khách nào, join phòng gì -> không debug được khi mất socket.
+    logger.info('👤 CLIENT CONNECTED', {
+      socketId: socket.id,
+      transport: socket.conn?.transport?.name,
+      ip: socket.handshake.address,
+      rideId: initialRideId || null,
+      userId: initialUserId || null,
+      walletUserId: initialWalletUserId || null,
+    });
+
     if (initialRideId) {
       socket.join(getRideRoom(initialRideId));
       const state = trackingState.get(String(initialRideId));
@@ -86,16 +98,49 @@ function attachSocketHandlers(io) {
       }
     }
 
-    const initialUserId = socket.handshake.auth?.userId || socket.handshake.query?.userId;
     if (initialUserId) {
       socket.join(getUserRoom(initialUserId));
       socket.join(getUserRoomDot(initialUserId));
     }
 
-    const initialWalletUserId = socket.handshake.auth?.walletUserId || socket.handshake.query?.walletUserId;
     if (initialWalletUserId) {
       socket.join(getWalletRoom(initialWalletUserId));
     }
+
+    // Log mất socket — lý do disconnect (transport close/error, client namespace
+    // disconnect, ping timeout...) là thông tin sống còn để chẩn đoán "mất hết socket"
+    // (vd ping timeout đồng loạt -> hạ tầng/network; transport error -> client app lỗi).
+    socket.on('disconnect', (reason) => {
+      logger.warn('🔌 CLIENT DISCONNECTED', {
+        socketId: socket.id,
+        reason,
+        rideId: initialRideId || null,
+        userId: initialUserId || null,
+        walletUserId: initialWalletUserId || null,
+      });
+    });
+
+    socket.on('disconnecting', (reason) => {
+      logger.warn('🔌 CLIENT DISCONNECTING', {
+        socketId: socket.id,
+        reason,
+        rooms: Array.from(socket.rooms || []),
+      });
+    });
+
+    socket.on('error', (error) => {
+      logger.error('Socket error', {
+        socketId: socket.id,
+        error: error?.message || String(error),
+      });
+    });
+
+    socket.on('connect_error', (error) => {
+      logger.error('Socket connect_error', {
+        socketId: socket.id,
+        error: error?.message || String(error),
+      });
+    });
 
     // Generic join room event
     socket.on('join', (room) => {
@@ -273,6 +318,17 @@ async function start() {
       origin: config.corsOrigins.includes('*') ? '*' : config.corsOrigins,
       methods: ['GET', 'POST'],
     },
+  });
+
+  // Lỗi ở tầng engine xảy ra TRƯỚC khi 'connection' bắn (handshake fail, CORS,
+  // transport bị chặn...) — không có socket.id vì kết nối chưa thành -> phải log riêng,
+  // không thì biến mất không dấu vết khi client không connect được ngay từ đầu.
+  io.engine.on('connection_error', (err) => {
+    logger.error('Engine connection_error', {
+      code: err.code,
+      message: err.message,
+      context: err.context,
+    });
   });
 
   attachSocketHandlers(io);
