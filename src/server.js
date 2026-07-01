@@ -18,6 +18,16 @@ const {
 // Redis message dispatcher — nhận message từ subscriber, định tuyến vào rooms
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Các event chỉ dành riêng cho 1 tài xế (offer/dispatch) — không được fan-out
+// vào ride room, vì khách hàng cũng join ride:{id} để xem tracking và sẽ
+// nhận nhầm thông báo mời đơn/offer không liên quan đến họ.
+const DRIVER_ONLY_EVENTS = new Set([
+  'ride.new_offer',
+  'ride.offer_countdown',
+  'ride.offer_taken',
+  'ride.offer_expired',
+]);
+
 /**
  * Xử lý một message đến từ bất kỳ kênh Redis nào.
  * Định tuyến message tới đúng room Socket.io dựa trên channel và nội dung payload.
@@ -37,7 +47,9 @@ function dispatchRedisMessage(io, channel, payload) {
   const eventName = payload.event || eventData.event;
 
   // ── 1. Phát theo Ride Room ──────────────────────────────────────────────
-  if (rideId) {
+  // Bỏ qua fan-out vào ride room với các event chỉ dành riêng cho 1 tài xế
+  // (ride.new_offer, ...) — đã có nhánh "Phát theo User Room" bên dưới lo rồi.
+  if (rideId && !DRIVER_ONLY_EVENTS.has(eventName)) {
     const rideRoom = getRideRoom(rideId);
 
     if (channel === config.redisChannel) {
